@@ -1,0 +1,143 @@
+import os, sys, asyncio, random, json, smtplib, re
+from datetime import datetime
+from email.mime.text import MIMEText
+
+# --- [ 1. AUTO-SYSTEM CHECK ] ---
+try:
+    from telethon import TelegramClient, events
+    from pyrogram import Client, filters
+    from pyrogram.raw import functions, types as raw_types
+except ImportError:
+    print("🚀 Installing High-Speed Libraries...")
+    os.system("pip install telethon pyrogram tgcrypto")
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+
+# --- [ 2. BHAYANKAR CONFIG MANAGER ] ---
+CONFIG_FILE = "bhayankar_config.json"
+SESSION_NAME = 'bhhayankar_v18'
+
+def setup_system():
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r") as f: return json.load(f)
+    
+    print("\n" + "═"*50 + "\n   💀 BHAYANKAR V18: MASTER SETUP 💀\n" + "═"*50)
+    print("Credentials missing! Let's link your accounts:")
+    
+    api_id = int(input(">> ENTER API_ID: ").strip())
+    api_hash = input(">> ENTER API_HASH: ").strip())
+    email = input(">> ENTER GMAIL (Sender): ").strip())
+    # User ko guide karne ke liye message
+    print("\n💡 TIP: Use 'App Password', not your regular password.")
+    app_pass = input(">> ENTER GMAIL APP PASSWORD: ").strip())
+    
+    data = {
+        "API_ID": api_id, "API_HASH": api_hash,
+        "EMAIL": email, "PASS": app_pass
+    }
+    with open(CONFIG_FILE, "w") as f: json.dump(data, f, indent=4)
+    print("\n[+] CONFIG SECURED. RESTARTING...")
+    return data
+
+CFG = setup_system()
+
+# --- [ 3. DEADLY FORMAL TEMPLATES ] ---
+ABUSE_TEMPLATES = [
+    "Subject: CRITICAL: Immediate Action Required - Child Safety Violation {target}\n\nTo the Telegram Abuse Department,\n\nWe are formally reporting User ID {target} for the distribution of prohibited materials involving minors. This is a severe violation of international law and Telegram's Terms of Service. Evidence suggests active involvement in illegal groups. Requesting permanent suspension of this account and all associated IP sessions immediately.",
+    
+    "Subject: URGENT: Terrorism & Violent Extremism Coordination - {target}\n\nSir/Madam,\n\nThis account ({target}) has been identified as a key node in coordinating violent extremist activities. The user is disseminating instructional material for harmful acts and radicalizing others. Under global safety regulations, we request you to terminate this account to prevent imminent threats.",
+    
+    "Subject: ALERT: Sophisticated Financial Fraud & Identity Theft - {target}\n\nSecurity Team,\n\nUser {target} is operating a malicious network for financial fraud, including phishing and session hijacking. They are impersonating verified entities to defraud users. This account poses a high risk to the Telegram ecosystem. Action: Permanent Ban.",
+    
+    "Subject: LEGAL: Distribution of Non-Consensual Private Imagery - {target}\n\nFormal Notice,\n\nAccount {target} is distributing private, non-consensual imagery (Revenge Porn). This is a direct violation of privacy laws. We demand the immediate removal of this user and a ban on their phone number from the platform."
+]
+
+# --- [ 4. DUAL ENGINE INITIALIZATION ] ---
+t_client = TelegramClient(SESSION_NAME, CFG["API_ID"], CFG["API_HASH"])
+p_app = Client("h1_terminator", api_id=CFG["API_ID"], api_hash=CFG["API_HASH"])
+
+# --- [ 5. CORE LOGIC FUNCTIONS ] ---
+
+async def log_to_saved(text):
+    """Saves every mission detail to your 'Saved Messages'"""
+    try:
+        report = f"🔱 **BHAYANKAR V18 REPORT** 🔱\n" + "═"*25 + f"\n{text}\n" + "═"*25 + f"\n📅 Date: `{datetime.now().strftime('%d/%m/%Y')}`\n⏰ Time: `{datetime.now().strftime('%H:%M:%S')}`"
+        await p_app.send_message("me", report)
+    except: pass
+
+def email_blast_logic(target_id, count, gap):
+    sent_count = 0
+    try:
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(CFG["EMAIL"], CFG["PASS"])
+            for i in range(count):
+                template = random.choice(ABUSE_TEMPLATES).format(target=target_id)
+                subject, body = template.split('\n\n', 1)
+                
+                msg = MIMEText(body)
+                msg['Subject'] = subject.replace('Subject: ', '')
+                msg['From'] = CFG["EMAIL"]
+                msg['To'] = "abuse@telegram.org"
+                
+                server.sendmail(CFG["EMAIL"], "abuse@telegram.org", msg.as_string())
+                sent_count += 1
+                asyncio.run(asyncio.sleep(gap)) # Gap between emails
+    except Exception as e:
+        print(f"Login/SMTP Error: {e}")
+    return sent_count
+
+# --- [ 6. SUPREME COMMANDS ] ---
+
+@p_app.on_message(filters.command("report", prefixes=".") & filters.me)
+async def internal_attack(client, message):
+    args = message.command
+    count = int(args[1]) if len(args) > 1 else 10
+    gap = float(args[2]) if len(args) > 2 else 0.5
+    
+    # Auto-detect Target
+    target = message.reply_to_message.from_user.id if message.reply_to_message else message.chat.id
+    await message.edit(f"🔱 **H1 ATTACK STARTED**\n🎯 Target: `{target}`\n🚀 Hits: `{count}`\n⏱ Gap: `{gap}s`")
+    
+    success = 0
+    for _ in range(count):
+        try:
+            peer = await client.resolve_peer(target)
+            await client.invoke(functions.account.ReportPeer(
+                peer=peer, reason=raw_types.InputReportReasonOther(), message=f"Abuse_Ref_{random.randint(100,999)}"
+            ))
+            success += 1
+            await asyncio.sleep(gap)
+        except: continue
+    
+    await message.edit(f"🏁 **MISSION FINISHED**\n✅ Successful Hits: `{success}`")
+    await log_to_saved(f"⚔️ **Internal Reporting**\n👤 Target: `{target}`\n✅ Hits: `{success}/{count}`\n⏱ Gap: `{gap}s`")
+
+@p_app.on_message(filters.command("reportE", prefixes=".") & filters.me)
+async def email_attack(client, message):
+    args = message.command
+    count = int(args[1]) if len(args) > 1 else 5
+    gap = float(args[2]) if len(args) > 2 else 1.5
+    
+    target = message.reply_to_message.from_user.id if message.reply_to_message else message.chat.id
+    await message.edit(f"📧 **EMAIL BLAST STARTED**\n🎯 Target: `{target}`\n📤 Mails: `{count}`\n⏱ Gap: `{gap}s`")
+    
+    # Run email logic in thread to not freeze client
+    loop = asyncio.get_event_loop()
+    sent = await loop.run_in_executor(None, email_blast_logic, target, count, gap)
+    
+    await message.edit(f"🏁 **EMAIL MISSION FINISHED**\n✅ Mails Sent: `{sent}`")
+    await log_to_saved(f"📧 **Email Abuse Blast**\n👤 Target: `{target}`\n📤 Sent: `{sent}/{count}`\n⏱ Gap: `{gap}s` Status: Dangerous")
+
+# --- [ 7. STARTUP ] ---
+
+async def start_bhayankar():
+    print("Connecting to Telegram...")
+    await t_client.start()
+    await p_app.start()
+    print("═"*40 + "\n🔱 BHAYANKAR V18 SUPREME IS LIVE\n" + "═"*40)
+    await asyncio.gather(t_client.run_until_disconnected())
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(start_bhayankar())
+    except KeyboardInterrupt:
+        sys.exit()
