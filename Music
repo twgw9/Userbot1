@@ -1,0 +1,111 @@
+import os
+import asyncio
+from pyrogram import Client, filters
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from pytgcalls import PyTgCalls
+from pytgcalls.types import AudioPiped
+from yt_dlp import YoutubeDL
+
+# --- 🛠 INTERACTIVE LOGIN & CONFIG ---
+print("🔥 BHAYANKAR MUSIC V1 SETUP 🔥")
+
+# Agar session file nahi hai, toh credentials maango
+API_ID = input("Apna API_ID daalo: ")
+API_HASH = input("Apna API_HASH daalo: ")
+BOT_TOKEN = input("Apna BOT_TOKEN (@BotFather wala) daalo: ")
+
+# User Client (Assistant) jo Voice Chat join karega
+# Ye khud login maangega agar authorized nahi hai
+app = Client("bhayankar_user", api_id=int(API_ID), api_hash=API_HASH)
+bot = Client("bhayankar_bot", api_id=int(API_ID), api_hash=API_HASH, bot_token=BOT_TOKEN)
+
+call_py = PyTgCalls(app)
+queue = []
+
+# --- 🎵 YOUTUBE DOWNLOADER CONFIG ---
+ydl_opts = {
+    "format": "bestaudio/best",
+    "quiet": True,
+    "no_warnings": True,
+}
+
+# --- 🎨 AESTHETIC UI & BUTTONS ---
+def get_buttons():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("⏸ Pause", callback_data="pause"),
+            InlineKeyboardButton("▶️ Resume", callback_data="resume"),
+        ],
+        [
+            InlineKeyboardButton("⏭ Skip", callback_data="skip"),
+            InlineKeyboardButton("⏹ Stop", callback_data="stop"),
+        ]
+    ])
+
+# --- 🚀 COMMANDS ---
+
+@bot.on_message(filters.command("play") & filters.group)
+async def play_cmd(client, message):
+    if len(message.command) < 2:
+        return await message.reply_text("`Bhai, gaane ka naam ya link toh do! 🎵`")
+    
+    query = " ".join(message.command[1:])
+    m = await message.reply_text("`Bhayankar Search Chalu Hai... 🔎`")
+
+    try:
+        with YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(f"ytsearch:{query}", download=False)['entries'][0]
+            url = info['url']
+            title = info['title']
+            duration = info.get('duration', 'N/A')
+            thumb = info.get('thumbnail')
+
+        if call_py.is_running:
+            queue.append({"url": url, "title": title})
+            await m.edit(f"**✅ Queue Mein Laga Diya!**\n\n🎵 **Title:** `{title}`\n📂 **Position:** #{len(queue)}")
+        else:
+            await call_py.start()
+            await call_py.join_group_call(
+                message.chat.id,
+                AudioPiped(url)
+            )
+            await m.delete()
+            await bot.send_photo(
+                message.chat.id,
+                photo=thumb,
+                caption=f"**🔥 NOW PLAYING (V18 ELITE) 🔥**\n\n🎵 **Song:** `{title}`\n⏱ **Duration:** `{duration}s`\n👤 **Requested By:** {message.from_user.mention}\n\n✨ Powered by Bhayankar V18 ✨",
+                reply_markup=get_buttons()
+            )
+
+    except Exception as e:
+        await m.edit(f"**Error:** `Bhai, pehle Voice Chat toh on karo! 🎙️` \nLog: `{e}`")
+
+@bot.on_callback_query()
+async def cb_handler(client, query):
+    if query.data == "pause":
+        await call_py.pause_stream(query.message.chat.id)
+        await query.answer("Paused ⏸")
+    elif query.data == "resume":
+        await call_py.resume_stream(query.message.chat.id)
+        await query.answer("Resumed ▶️")
+    elif query.data == "stop":
+        await call_py.leave_group_call(query.message.chat.id)
+        await query.answer("Stopped ⏹")
+    elif query.data == "skip":
+        if not queue:
+            await query.answer("Queue Empty Hai Bhai! 🤷‍♂️")
+        else:
+            next_song = queue.pop(0)
+            await call_py.change_stream(query.message.chat.id, AudioPiped(next_song['url']))
+            await query.edit_message_caption(f"**⏭ Skipped! Now Playing:**\n`{next_song['title']}`", reply_markup=get_buttons())
+
+# --- 🛡 RUN BOTH CLIENTS ---
+async def main():
+    await app.start()
+    await bot.start()
+    print("[+] BHAYANKAR MUSIC V1 IS LIVE! ⚡")
+    await asyncio.Event().wait()
+
+if __name__ == "__main__":
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
